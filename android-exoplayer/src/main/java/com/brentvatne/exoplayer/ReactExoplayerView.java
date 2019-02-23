@@ -1,18 +1,20 @@
 package com.brentvatne.exoplayer;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
-import android.view.Window;
+import android.view.ViewGroup;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 
 import com.brentvatne.react.R;
 import com.brentvatne.receiver.AudioBecomingNoisyReceiver;
@@ -54,7 +56,6 @@ import com.google.android.exoplayer2.source.smoothstreaming.DefaultSsChunkSource
 import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource;
 import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
-import com.google.android.exoplayer2.trackselection.FixedTrackSelection;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
@@ -62,7 +63,6 @@ import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultAllocator;
 import com.google.android.exoplayer2.upstream.BandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
-import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.ui.PlayerControlView;
 
@@ -144,6 +144,8 @@ class ReactExoplayerView extends FrameLayout implements
     private boolean playInBackground = false;
     private Map<String, String> requestHeaders;
     private boolean mReportBandwidth = false;
+    private Dialog mFullScreenDialog;
+    private ImageView mFullScreenIcon;
     // \ End props
 
     // React
@@ -275,6 +277,68 @@ class ReactExoplayerView extends FrameLayout implements
         }
     }
 
+    private void initFullscreenDialog() {
+        mFullScreenDialog = new Dialog(getContext(), android.R.style.Theme_Black_NoTitleBar_Fullscreen) {
+            public void onBackPressed() {
+                if (isFullscreen)
+                    closeFullscreenDialog();
+                super.onBackPressed();
+            }
+        };
+    }
+
+    private void closeFullscreenDialog() {
+        eventEmitter.fullscreenWillDismiss();
+
+        ((ViewGroup) exoPlayerView.getParent()).removeView(exoPlayerView);
+        ((ViewGroup) playerControlView.getParent()).removeView(playerControlView);
+
+        this.addView(exoPlayerView, 0);
+        this.addView(playerControlView, 1);
+
+        isFullscreen = false;
+        mFullScreenDialog.dismiss();
+        mFullScreenIcon.setImageDrawable(ContextCompat.getDrawable(getContext(), R.drawable.ic_fullscreen_expand));
+
+        eventEmitter.fullscreenWillDismiss();
+    }
+
+    private void openFullscreenDialog() {
+        eventEmitter.fullscreenWillPresent();
+
+        this.removeView(exoPlayerView);
+        this.removeView(playerControlView);
+
+        FrameLayout fl = new FrameLayout(getContext());
+        fl.setLayoutParams(new FrameLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.MATCH_PARENT));
+
+        fl.addView(exoPlayerView, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        fl.addView(playerControlView, 1, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        mFullScreenDialog.addContentView(fl, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mFullScreenIcon.setImageDrawable(ContextCompat.getDrawable(getContext(), R.drawable.ic_fullscreen_skrink));
+        isFullscreen = true;
+        mFullScreenDialog.show();
+
+        eventEmitter.fullscreenDidPresent();
+    }
+
+    private void initFullscreenButton() {
+        mFullScreenIcon = playerControlView.findViewById(R.id.exo_fullscreen_icon);
+        View mFullScreenButton = playerControlView.findViewById(R.id.exo_fullscreen_button);
+        mFullScreenButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!isFullscreen)
+                    openFullscreenDialog();
+                else
+                    closeFullscreenDialog();
+            }
+        });
+    }
+
     /**
      * Initializing Player control
      */
@@ -380,6 +444,8 @@ class ReactExoplayerView extends FrameLayout implements
 
         // Initializing the playerControlView
         initializePlayerControl();
+        initFullscreenDialog();
+        initFullscreenButton();
     }
 
     private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
@@ -1053,7 +1119,6 @@ class ReactExoplayerView extends FrameLayout implements
         }
     }
 
-
     public void setVolumeModifier(float volume) {
         audioVolume = volume;
         if (player != null) {
@@ -1105,31 +1170,10 @@ class ReactExoplayerView extends FrameLayout implements
         }
         isFullscreen = fullscreen;
 
-        Activity activity = themedReactContext.getCurrentActivity();
-        if (activity == null) {
-            return;
-        }
-        Window window = activity.getWindow();
-        View decorView = window.getDecorView();
-        int uiOptions;
-        if (isFullscreen) {
-            if (Util.SDK_INT >= 19) { // 4.4+
-                uiOptions = SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | SYSTEM_UI_FLAG_FULLSCREEN;
-            } else {
-                uiOptions = SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | SYSTEM_UI_FLAG_FULLSCREEN;
-            }
-            eventEmitter.fullscreenWillPresent();
-            decorView.setSystemUiVisibility(uiOptions);
-            eventEmitter.fullscreenDidPresent();
-        } else {
-            uiOptions = View.SYSTEM_UI_FLAG_VISIBLE;
-            eventEmitter.fullscreenWillDismiss();
-            decorView.setSystemUiVisibility(uiOptions);
-            eventEmitter.fullscreenDidDismiss();
-        }
+        if (isFullscreen)
+            openFullscreenDialog();
+        else
+            closeFullscreenDialog();
     }
 
     public void setUseTextureView(boolean useTextureView) {
