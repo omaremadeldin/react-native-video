@@ -24,6 +24,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String REACT_CLASS = "RCTVideo";
 
     private static final String PROP_SRC = "src";
+    private static final String PROP_VAST_TAG = "vastTag";
     private static final String PROP_SRC_URI = "uri";
     private static final String PROP_SRC_TYPE = "type";
     private static final String PROP_SRC_HEADERS = "requestHeaders";
@@ -114,15 +115,15 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
             }
         } else {
             int identifier = context.getResources().getIdentifier(
-                uriString,
-                "drawable",
-                context.getPackageName()
+                    uriString,
+                    "drawable",
+                    context.getPackageName()
             );
             if (identifier == 0) {
                 identifier = context.getResources().getIdentifier(
-                    uriString,
-                    "raw",
-                    context.getPackageName()
+                        uriString,
+                        "raw",
+                        context.getPackageName()
                 );
             }
             if (identifier > 0) {
@@ -132,6 +133,11 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
                 }
             }
         }
+    }
+
+    @ReactProp(name = PROP_VAST_TAG)
+    public void setVastTag(final  ReactExoplayerView videoView, final String vastUrl) {
+        videoView.setVastUri(Uri.parse(vastUrl));
     }
 
     @ReactProp(name = PROP_RESIZE_MODE)

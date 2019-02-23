@@ -37,6 +37,7 @@ import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
+import com.google.android.exoplayer2.ext.ima.ImaAdsLoader;
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.mediacodec.MediaCodecRenderer;
 import com.google.android.exoplayer2.mediacodec.MediaCodecUtil;
@@ -49,6 +50,7 @@ import com.google.android.exoplayer2.source.MergingMediaSource;
 import com.google.android.exoplayer2.source.SingleSampleMediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.source.TrackGroup;
+import com.google.android.exoplayer2.source.ads.AdsMediaSource;
 import com.google.android.exoplayer2.source.dash.DashMediaSource;
 import com.google.android.exoplayer2.source.dash.DefaultDashChunkSource;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
@@ -129,6 +131,7 @@ class ReactExoplayerView extends FrameLayout implements
 
     // Props from React
     private Uri srcUri;
+    private Uri vastUri;
     private String extension;
     private boolean repeat;
     private String audioTrackType;
@@ -146,6 +149,7 @@ class ReactExoplayerView extends FrameLayout implements
     private boolean mReportBandwidth = false;
     private Dialog mFullScreenDialog;
     private ImageView mFullScreenIcon;
+    private ImaAdsLoader imaAdsLoader;
     // \ End props
 
     // React
@@ -435,7 +439,18 @@ class ReactExoplayerView extends FrameLayout implements
             if (haveResumePosition) {
                 player.seekTo(resumeWindow, resumePosition);
             }
-            player.prepare(mediaSource, !haveResumePosition, false);
+            if (vastUri != null) {
+                imaAdsLoader = new ImaAdsLoader(getContext(), vastUri);
+                MediaSource adsMediaSource = new AdsMediaSource(
+                        mediaSource,
+                        mediaDataSourceFactory,
+                        imaAdsLoader,
+                        (ViewGroup) exoPlayerView.getParent());
+                player.prepare(adsMediaSource, !haveResumePosition, false);
+            } else {
+                player.prepare(mediaSource, !haveResumePosition, false);
+            }
+
             playerNeedsSource = false;
 
             eventEmitter.loadStart();
@@ -923,6 +938,10 @@ class ReactExoplayerView extends FrameLayout implements
         }
     }
 
+    public void setVastUri(final Uri uri) {
+        vastUri = uri;
+    }
+
     public void setProgressUpdateInterval(final float progressUpdateInterval) {
         mProgressUpdateInterval = progressUpdateInterval;
     }
@@ -1205,4 +1224,20 @@ class ReactExoplayerView extends FrameLayout implements
             removeViewAt(1);
         }
     }
+
+    @Override
+    public void requestLayout() {
+        super.requestLayout();
+        post(measureAndLayout);
+    }
+
+    private final Runnable measureAndLayout = new Runnable() {
+        @Override
+        public void run() {
+            measure(
+                    MeasureSpec.makeMeasureSpec(getWidth(), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.EXACTLY));
+            layout(getLeft(), getTop(), getRight(), getBottom());
+        }
+    };
 }

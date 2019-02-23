@@ -21,6 +21,9 @@ dependencies {
     implementation('com.google.android.exoplayer:exoplayer:2.9.3') {
         exclude group: 'com.android.support'
     }
+    implementation('com.google.android.exoplayer:extension-ima:2.9.3') {
+        exclude group: 'com.android.support'
+    }
 
     // All support libs must use the same version
     implementation "com.android.support:support-annotations:${safeExtGet('supportLibVersion', '+')}"
